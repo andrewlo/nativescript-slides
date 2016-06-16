@@ -50,6 +50,7 @@ export class SlideContainer extends AbsoluteLayout {
 	private direction: direction = direction.none;
 	private _loaded: boolean;
 	private _pageWidth: number;
+	private _slideWidth: number;
 	private _loop: boolean;
 	private _interval: number;
 	private _pagerOffset: string;
@@ -62,6 +63,7 @@ export class SlideContainer extends AbsoluteLayout {
 	private _footer: StackLayout;
 	private _pageIndicators: boolean;
 	private _indicatorsColor: string;
+	private _peekAmount: number = 20;
 
 	public static startEvent = "start";
 	public static changedEvent = "changed";
@@ -184,6 +186,7 @@ export class SlideContainer extends AbsoluteLayout {
 
 		this.transitioning = false;
 		this._pageWidth = Platform.screen.mainScreen.widthDIPs;
+		this._slideWidth = Platform.screen.mainScreen.widthDIPs - 100;
 
 		if (this._interval == null) {
 			this.interval = 0;
@@ -242,8 +245,9 @@ export class SlideContainer extends AbsoluteLayout {
 				this.eachLayoutChild((view: View) => {
 					if (view instanceof StackLayout) {
 						AbsoluteLayout.setLeft(view, this.pageWidth);
-						view.width = this.pageWidth;
+						view.width = this._slideWidth;
 						(<any>view).height = '100%'; //get around compiler
+						view.translateX = this.getRightRightPeekPosition();
 						slides.push(view);
 					}
 				});
@@ -263,7 +267,8 @@ export class SlideContainer extends AbsoluteLayout {
 
 
 				this.currentPanel = this.buildSlideMap(slides);
-				this.currentPanel.panel.translateX = -this.pageWidth;
+				this.currentPanel.panel.translateX = this.getCenterPeekPosition();
+				this.currentPanel.right.panel.translateX = this.getRightPeekPosition();
 
 				if (this.disablePan === false) {
 					this.applySwipe(this.pageWidth);
@@ -277,7 +282,7 @@ export class SlideContainer extends AbsoluteLayout {
 						this.eachLayoutChild((view: View) => {
 							if (view instanceof StackLayout) {
 								AbsoluteLayout.setLeft(view, this.pageWidth);
-								view.width = this.pageWidth;
+								view.width = this._slideWidth;
 							}
 						});
 
@@ -288,7 +293,8 @@ export class SlideContainer extends AbsoluteLayout {
 						if (this.pageIndicators) {
 							this._footer.marginTop = <any>'88%';
 						}
-						this.currentPanel.panel.translateX = -this.pageWidth;
+						this.currentPanel.panel.translateX = this.getCenterPeekPosition();
+						this.currentPanel.right.panel.translateX = this.getRightPeekPosition();
 					}, 100);
 				});
 			}
@@ -378,6 +384,27 @@ export class SlideContainer extends AbsoluteLayout {
 		this.rebindSlideShow();
 	}
 
+	private getCenterPeekPosition(): number {
+		return (this.pageWidth - this._slideWidth) / 2 - this.pageWidth;
+	}
+
+	private getLeftPeekPosition(): number {
+		return this._peekAmount - this._slideWidth - this.pageWidth;
+	}
+
+	private getRightPeekPosition(): number {
+		return -this._peekAmount;
+	}
+
+	private getLeftLeftPeekPosition(): number {
+		return this.getLeftPeekPosition() - this._slideWidth / 2 - this.pageWidth / 2 + this._peekAmount;
+	}
+
+
+	private getRightRightPeekPosition(): number {
+		return this.getRightPeekPosition() + this._slideWidth / 2 + this.pageWidth / 2 - this._peekAmount;
+	}
+
 	private applySwipe(pageWidth: number): void {
 		let previousDelta = -1; //hack to get around ios firing pan event after release
 		let endingVelocity = 0;
@@ -444,31 +471,31 @@ export class SlideContainer extends AbsoluteLayout {
 					this.triggerCancelEvent(cancellationReason.user);
 					this.transitioning = true;
 					this.currentPanel.panel.animate({
-						translate: { x: -this.pageWidth, y: 0 },
+						translate: { x: this.getCenterPeekPosition(), y: 0 },
 						duration: 200,
 						curve: AnimationCurve.easeOut
 					});
 					if (this.hasNext) {
 						this.currentPanel.right.panel.animate({
-							translate: { x: 0, y: 0 },
+							translate: { x: this.getRightPeekPosition(), y: 0 },
 							duration: 200,
 							curve: AnimationCurve.easeOut
 						});
 						if (app.ios) //for some reason i have to set these in ios or there is some sort of bounce back.
-							this.currentPanel.right.panel.translateX = 0;
+							this.currentPanel.right.panel.translateX = this.getRightPeekPosition();
 					}
 					if (this.hasPrevious) {
 						this.currentPanel.left.panel.animate({
-							translate: { x: -this.pageWidth * 2, y: 0 },
+							translate: { x: this.getLeftPeekPosition(), y: 0 },
 							duration: 200,
 							curve: AnimationCurve.easeOut
 						});
 						if (app.ios)
-							this.currentPanel.left.panel.translateX = -this.pageWidth;
+							this.currentPanel.left.panel.translateX = this.getLeftPeekPosition();
 
 					}
 					if (app.ios)
-						this.currentPanel.panel.translateX = -this.pageWidth;
+						this.currentPanel.panel.translateX = this.getCenterPeekPosition();
 
 					this.transitioning = false;
 				}
@@ -480,10 +507,16 @@ export class SlideContainer extends AbsoluteLayout {
 
 					if (this.hasNext) {
 						this.direction = direction.left;
-						this.currentPanel.panel.translateX = args.deltaX - this.pageWidth;
-						this.currentPanel.right.panel.translateX = args.deltaX;
-
+						if (this.hasPrevious) {
+							if (this.currentPanel.left.left) {
+								this.currentPanel.left.left.panel.translateX = args.deltaX + this.getLeftLeftPeekPosition();
+							}
+							this.currentPanel.left.panel.translateX = args.deltaX + this.getLeftPeekPosition();
+						}
+						this.currentPanel.panel.translateX = args.deltaX + this.getCenterPeekPosition();
+						this.currentPanel.right.panel.translateX = args.deltaX + this.getRightPeekPosition();
 					}
+
 				} else if (!this.transitioning
 					&& previousDelta !== args.deltaX
 					&& args.deltaX != null
@@ -491,9 +524,16 @@ export class SlideContainer extends AbsoluteLayout {
 
 					if (this.hasPrevious) {
 						this.direction = direction.right;
-						this.currentPanel.panel.translateX = args.deltaX - this.pageWidth;
-						this.currentPanel.left.panel.translateX = -(this.pageWidth * 2) + args.deltaX;
+						this.currentPanel.left.panel.translateX = args.deltaX + this.getLeftPeekPosition();
+						this.currentPanel.panel.translateX = args.deltaX + this.getCenterPeekPosition();
+						if (this.hasNext) {
+							this.currentPanel.right.panel.translateX = args.deltaX + this.getRightPeekPosition();
+							if (this.currentPanel.right.right) {
+								this.currentPanel.right.right.panel.translateX = args.deltaX + this.getRightRightPeekPosition();
+							}
+						}
 					}
+
 				}
 
 				if (args.deltaX !== 0) {
@@ -514,19 +554,36 @@ export class SlideContainer extends AbsoluteLayout {
 		}
 
 		let transition = new Array();
-
-		transition.push({
-			target: panelMap.right.panel,
-			translate: { x: -this.pageWidth, y: 0 },
-			duration: animationDuration,
-			curve: AnimationCurve.easeOut
-		});
+		if (panelMap.right.right) {
+			transition.push({
+				target: panelMap.right.right.panel,
+				translate: { x: this.getRightPeekPosition(), y: 0 },
+				duration: animationDuration,
+				curve: AnimationCurve.easeOut
+			});
+		}
+		if (panelMap.right) {
+			transition.push({
+				target: panelMap.right.panel,
+				translate: { x: this.getCenterPeekPosition(), y: 0 },
+				duration: animationDuration,
+				curve: AnimationCurve.easeOut
+			});
+		}
 		transition.push({
 			target: panelMap.panel,
-			translate: { x: -this.pageWidth * 2, y: 0 },
+			translate: { x: this.getLeftPeekPosition(), y: 0 },
 			duration: animationDuration,
 			curve: AnimationCurve.easeOut
 		});
+		if (panelMap.left) {
+			transition.push({
+				target: panelMap.left.panel,
+				translate: { x: this.getLeftLeftPeekPosition(), y: 0 },
+				duration: animationDuration,
+				curve: AnimationCurve.easeOut
+			});
+		}
 		let animationSet = new AnimationModule.Animation(transition, false);
 
 		return animationSet.play();
@@ -544,18 +601,36 @@ export class SlideContainer extends AbsoluteLayout {
 
 		let transition = new Array();
 
-		transition.push({
-			target: panelMap.left.panel,
-			translate: { x: -this.pageWidth, y: 0 },
-			duration: animationDuration,
-			curve: AnimationCurve.easeOut
-		});
+		if (panelMap.left.left) {
+			transition.push({
+				target: panelMap.left.left.panel,
+				translate: { x: this.getLeftPeekPosition(), y: 0 },
+				duration: animationDuration,
+				curve: AnimationCurve.easeOut
+			});
+		}
+		if (panelMap.left) {
+			transition.push({
+				target: panelMap.left.panel,
+				translate: { x: this.getCenterPeekPosition(), y: 0 },
+				duration: animationDuration,
+				curve: AnimationCurve.easeOut
+			});
+		}
 		transition.push({
 			target: panelMap.panel,
-			translate: { x: 0, y: 0 },
+			translate: { x: this.getRightPeekPosition(), y: 0 },
 			duration: animationDuration,
 			curve: AnimationCurve.easeOut
 		});
+		if (panelMap.right) {
+			transition.push({
+				target: panelMap.right.panel,
+				translate: { x: this.getRightRightPeekPosition(), y: 0 },
+				duration: animationDuration,
+				curve: AnimationCurve.easeOut
+			});
+		}
 		let animationSet = new AnimationModule.Animation(transition, false);
 
 		return animationSet.play();

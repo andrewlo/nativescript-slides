@@ -15,6 +15,7 @@ export declare class SlideContainer extends AbsoluteLayout {
     private direction;
     private _loaded;
     private _pageWidth;
+    private _slideWidth;
     private _loop;
     private _interval;
     private _pagerOffset;
@@ -27,6 +28,7 @@ export declare class SlideContainer extends AbsoluteLayout {
     private _footer;
     private _pageIndicators;
     private _indicatorsColor;
+    private _peekAmount;
     static startEvent: string;
     static changedEvent: string;
     static cancelledEvent: string;
@@ -58,6 +60,11 @@ export declare class SlideContainer extends AbsoluteLayout {
     previousSlide(): void;
     resetAndroidTranslucentFlags(): void;
     private setupPanel(panel);
+    private getCenterPeekPosition();
+    private getLeftPeekPosition();
+    private getRightPeekPosition();
+    private getLeftLeftPeekPosition();
+    private getRightRightPeekPosition();
     private applySwipe(pageWidth);
     private showRightSlide(panelMap, offset?, endingVelocity?);
     private showLeftSlide(panelMap, offset?, endingVelocity?);
